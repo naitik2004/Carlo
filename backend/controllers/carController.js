@@ -40,9 +40,31 @@ const getCarById = async (req, res) => {
 // CREATE CAR
 const createCar = async (req, res) => {
   try {
+    let imageUrls = [];
+
+    if (req.files && req.files.length > 0) {
+      const cloudinary = require('../config/cloudinary');
+      
+      const uploadPromises = req.files.map(file => {
+        return new Promise((resolve, reject) => {
+          const uploadStream = cloudinary.uploader.upload_stream(
+            { resource_type: 'auto', folder: 'carlo_cars' },
+            (error, result) => {
+              if (error) reject(error);
+              else resolve(result.secure_url);
+            }
+          );
+          uploadStream.end(file.buffer);
+        });
+      });
+
+      imageUrls = await Promise.all(uploadPromises);
+    }
+
     const car = await Car.create({
       ...req.body,
-      owner: req.user._id, // DO NOT REMOVE THIS
+      images: imageUrls,
+      owner: req.user._id,
     });
 
     return res.status(201).json(car);

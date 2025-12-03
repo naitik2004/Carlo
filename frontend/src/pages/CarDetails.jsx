@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import API from '../api/axios';
 import { useAuth } from '../context/AuthContext';
-import { Users, Fuel, Settings, MapPin, Calendar, CheckCircle } from 'lucide-react';
+import { Users, Fuel, Settings, MapPin, Calendar, CheckCircle, Trash2 } from 'lucide-react';
 
 const CarDetails = () => {
   const { id } = useParams();
@@ -51,6 +51,18 @@ const CarDetails = () => {
     }
   };
 
+  const handleDelete = async () => {
+    if (window.confirm('Are you sure you want to delete this car? This action cannot be undone.')) {
+      try {
+        await API.delete(`/cars/${id}`);
+        navigate('/dashboard');
+      } catch (error) {
+        console.error('Error deleting car:', error);
+        alert('Failed to delete car');
+      }
+    }
+  };
+
   if (loading) return <div className="text-center py-12">Loading...</div>;
   if (!car) return <div className="text-center py-12">Car not found</div>;
 
@@ -84,6 +96,16 @@ const CarDetails = () => {
               {car.location}
             </div>
             <p className="text-3xl font-bold text-primary">${car.pricePerDay}<span className="text-lg text-slate-500 font-normal">/day</span></p>
+            
+            {user && user._id === car.owner && (
+              <button 
+                onClick={handleDelete}
+                className="mt-4 flex items-center gap-2 text-red-600 hover:text-red-700 font-medium transition-colors"
+              >
+                <Trash2 className="w-5 h-5" />
+                Delete Car
+              </button>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-4 py-6 border-y border-gray-100">

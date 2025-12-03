@@ -16,16 +16,33 @@ const CreateListing = () => {
     location: '',
     pricePerDay: '',
   });
+  const [images, setImages] = useState([]);
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
+
+  const handleImageChange = (e) => {
+    setImages(e.target.files);
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     try {
-      await API.post('/cars', formData);
+      const data = new FormData();
+      for (const key in formData) {
+        data.append(key, formData[key]);
+      }
+      for (let i = 0; i < images.length; i++) {
+        data.append('images', images[i]);
+      }
+
+      await API.post('/cars', data, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
       navigate('/dashboard');
     } catch (error) {
       console.error('Error creating listing:', error);
@@ -155,6 +172,17 @@ const CreateListing = () => {
             className="input-field"
             placeholder="City, State"
             required
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Images</label>
+          <input
+            type="file"
+            multiple
+            onChange={handleImageChange}
+            className="input-field py-2"
+            accept="image/*"
           />
         </div>
 
