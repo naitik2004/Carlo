@@ -1,9 +1,6 @@
 const Booking = require('../models/Booking');
 const Car = require('../models/Car');
 
-// @desc    Create new booking
-// @route   POST /api/bookings
-// @access  Private
 const createBooking = async (req, res) => {
   try {
     const { carId, startDate, endDate } = req.body;
@@ -54,9 +51,6 @@ const createBooking = async (req, res) => {
   }
 };
 
-// @desc    Get my bookings
-// @route   GET /api/bookings/me
-// @access  Private
 const getMyBookings = async (req, res) => {
   try {
     const bookings = await Booking.find({ user: req.user.id }).populate('car').sort({ createdAt: -1 });
@@ -66,9 +60,7 @@ const getMyBookings = async (req, res) => {
   }
 };
 
-// @desc    Get all bookings (Admin)
-// @route   GET /api/bookings
-// @access  Private/Admin
+
 const getAllBookings = async (req, res) => {
     try {
         const bookings = await Booking.find({}).populate('user', 'name email').populate('car');

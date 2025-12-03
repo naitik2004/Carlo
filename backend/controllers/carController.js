@@ -3,7 +3,20 @@ const Car = require('../models/Car');
 // GET ALL CARS
 const getCars = async (req, res) => {
   try {
-    const cars = await Car.find();
+    const { location, minPrice, maxPrice } = req.query;
+    let query = {};
+
+    if (location) {
+      query.location = { $regex: location, $options: 'i' };
+    }
+
+    if (minPrice || maxPrice) {
+      query.pricePerDay = {};
+      if (minPrice) query.pricePerDay.$gte = Number(minPrice);
+      if (maxPrice) query.pricePerDay.$lte = Number(maxPrice);
+    }
+
+    const cars = await Car.find(query);
     return res.status(200).json(cars);
   } catch (err) {
     console.error("GET CARS ERROR:", err.message);
