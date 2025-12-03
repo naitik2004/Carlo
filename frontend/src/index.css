@@ -1,0 +1,26 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #2563eb;
+  --color-secondary: #1e293b;
+  --color-accent: #f59e0b;
+  --font-sans: 'Inter', sans-serif;
+}
+
+body {
+  font-family: var(--font-sans);
+  @apply bg-gray-50 text-slate-900;
+}
+
+.btn-primary {
+  @apply bg-primary text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors duration-300 font-medium cursor-pointer;
+}
+
+.btn-secondary {
+  @apply bg-white text-slate-700 border border-slate-300 px-4 py-2 rounded-lg hover:bg-slate-50 transition-colors duration-300 font-medium cursor-pointer;
+}
+
+.input-field {
+  @apply w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all duration-200;
+}

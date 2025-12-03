@@ -1,0 +1,10 @@
+{
+  "dependencies": {
+    "@tailwindcss/vite": "^4.1.17",
+    "mongodb": "^7.0.0",
+    "tailwindcss": "^4.1.17"
+  },
+  "devDependencies": {
+    "@tailwindcss/language-server": "^0.14.29"
+  }
+}
