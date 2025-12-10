@@ -17,7 +17,7 @@ const bookingSchema = mongoose.Schema({
   status: {
     type: String,
     enum: ['pending', 'confirmed', 'cancelled', 'completed'],
-    default: 'confirmed', // Auto-confirm for simplicity as per prompt implies basic flow
+    default: 'confirmed'
   },
 }, {
   timestamps: true,

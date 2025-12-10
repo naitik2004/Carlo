@@ -10,6 +10,9 @@ const createBooking = async (req, res) => {
       return res.status(404).json({ message: 'Car not found' });
     }
 
+
+
+
     // Calculate total price
     const start = new Date(startDate);
     const end = new Date(endDate);
@@ -21,8 +24,12 @@ const createBooking = async (req, res) => {
     }
 
     const totalPrice = diffDays * car.pricePerDay;
+    
 
-    // Check for conflicts
+
+
+
+
     const conflict = await Booking.findOne({
       car: carId,
       status: { $ne: 'cancelled' },
@@ -31,9 +38,13 @@ const createBooking = async (req, res) => {
       ]
     });
 
+    
     if (conflict) {
       return res.status(400).json({ message: 'Car is already booked for these dates' });
     }
+
+
+
 
     const booking = await Booking.create({
       user: req.user.id,

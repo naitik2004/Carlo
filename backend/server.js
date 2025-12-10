@@ -8,10 +8,8 @@ dotenv.config();
 
 const app = express();
 
-// ⭐ CONNECT MONGODB
 connectDB();
 
-// ⭐ FIXED CORS (WORKING 100%)
 app.use(cors());
 
 app.use(express.json());
@@ -22,18 +20,15 @@ app.use((req, res, next) => {
   next();
 });
 
-// ⭐ ROUTES
 app.use("/api/auth", require("./routes/authRoutes"));
 app.use("/api/cars", require("./routes/carRoutes"));
 app.use("/api/bookings", require("./routes/bookingRoutes"));
-// app.use('/api/users', require('./routes/userRoutes')); // optional
 
-// Default Route
+
 app.get("/", (req, res) => {
   res.send("API is running...");
 });
 
-// ⭐ START SERVER
 const PORT = process.env.PORT || 5001;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
 
@@ -75,3 +70,13 @@ app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
 // app.listen(PORT, () => {
 //   console.log(`Server running on port ${PORT}`);
 // });
+
+
+
+
+
+
+
+
+// deepclone 
+// const deepClone = obj => JSON.parse(JSON.stringify(obj));

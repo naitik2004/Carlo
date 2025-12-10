@@ -7,7 +7,7 @@ const carSchema = mongoose.Schema({
   year: { type: Number, required: true },
   seats: { type: Number, required: true },
   transmission: { type: String, required: true }, // Automatic, Manual
-  fuelType: { type: String, required: true }, // Petrol, Diesel, Electric, Hybrid
+  fuelType: { type: String, required: true },
   location: { type: String, required: true },
   pricePerDay: { type: Number, required: true },
   images: [{ type: String }],

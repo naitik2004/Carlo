@@ -41,6 +41,8 @@ const getCarById = async (req, res) => {
 const createCar = async (req, res) => {
   try {
     let imageUrls = [];
+    console.log("CREATE CAR BODY:", req.body);
+    console.log("CREATE CAR FILES:", req.files ? req.files.length : 0);
 
     if (req.files && req.files.length > 0) {
       const cloudinary = require('../config/cloudinary');
@@ -69,7 +71,8 @@ const createCar = async (req, res) => {
 
     return res.status(201).json(car);
   } catch (err) {
-    console.error("CREATE CAR ERROR:", err.message);
+    console.error("CREATE CAR ERROR:", err);
+    console.error("CREATE CAR ERROR MSG:", err.message);
     return res.status(500).json({ message: "Server error creating car" });
   }
 };
