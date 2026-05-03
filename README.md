@@ -15,7 +15,7 @@ Carlo is a full-stack car rental app with a React/Vite frontend and an Express/M
 1. Developers open a branch and make logical commits.
 2. Pull requests trigger lint, unit tests, integration tests, and the frontend build.
 3. Pushes to `main` also run the same checks.
-4. The EC2 deployment workflow can SSH into an EC2 host and run `scripts/deploy-ec2.sh`.
+4. The EC2 deployment workflow can run in either SSH mode or AWS Systems Manager mode and then execute `scripts/deploy-ec2.sh`.
 
 ## Local Development
 
@@ -51,6 +51,11 @@ Backend:
 Frontend:
 
 - `VITE_API_URL`: backend base URL, for example `http://localhost:4000`.
+
+GitHub deployment secrets:
+
+- SSH mode: `EC2_HOST`, `EC2_USER`, `EC2_SSH_KEY`, `EC2_APP_DIR`.
+- AWS learner/SSM mode: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`, `AWS_REGION`, `EC2_INSTANCE_ID`, `EC2_APP_DIR`.
 
 ## Testing Strategy
 
