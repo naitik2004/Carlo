@@ -60,11 +60,17 @@ GitHub Actions secrets (**Settings → Secrets and variables → Actions**), per
 - `AWS_SECRET_ACCESS_KEY`
 - `AWS_SESSION_TOKEN`
 - `AWS_REGION`
+- **`TF_STATE_BUCKET`** — name of an **empty S3 bucket** you create once in the **same region** as `AWS_REGION`, used only to store `terraform.tfstate` (GitHub runners are ephemeral; without this, every run tries to recreate ECR/SG/etc. and fails with “already exists”).
 
-**Optional (app / restricted IAM):**
+**ECS / IAM (pick one):**
+
+- **`ECS_EXECUTION_ROLE_ARN`** — required for **AWS Academy / Vocareum** (and any account that denies `iam:CreateRole`). Use an existing role that trusts `ecs-tasks.amazonaws.com` and can pull from ECR and write logs (e.g. `AmazonECSTaskExecutionRolePolicy`).
+- **`IAM_ROLE_CREATION_ALLOWED`** — set to `true` only if your IAM user **may** create roles; then Terraform creates the execution/task roles and `ECS_EXECUTION_ROLE_ARN` can be omitted.
+
+**Optional (app):**
 
 - `MONGO_URI`, `JWT_SECRET` — passed into the ECS task when set.
-- `ECS_EXECUTION_ROLE_ARN` (and optionally `ECS_TASK_ROLE_ARN`) — use when your AWS account (e.g. AWS Academy) blocks creating new IAM roles; supply an existing ECS execution role ARN.
+- `ECS_TASK_ROLE_ARN` — optional separate task role when using a lab execution role.
 
 **EC2 workflow only (if you use `deploy-ec2.yml`):**
 
@@ -83,6 +89,14 @@ GitHub Actions secrets (**Settings → Secrets and variables → Actions**), per
 - The backend app is exported separately from server startup so tests can exercise routes without opening a production port or connecting to MongoDB.
 - API calls are centralized in `frontend/src/utils/api.js` so auth headers and base URLs are handled consistently.
 - Deployment is script-driven and idempotent: directories are created with `mkdir -p`, dependencies are installed deterministically, and PM2 restart/start commands can run repeatedly.
+
+## Terraform / CI troubleshooting
+
+**`RepositoryAlreadyExistsException` (ECR) or log group already exists**  
+You likely had a failed run **before** remote state was configured. Either delete the leftover `carlo-backend` ECR repository and `/ecs/carlo-backend` log group in the AWS console, then re-run CI, or import them into state (advanced).
+
+**`AccessDenied` on `iam:CreateRole`**  
+Add **`ECS_EXECUTION_ROLE_ARN`** with an existing execution role ARN. Do not rely on Terraform creating roles in learner labs.
 
 ## Challenges
 

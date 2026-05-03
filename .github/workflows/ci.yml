@@ -144,11 +144,26 @@ jobs:
           : "${AWS_SECRET_ACCESS_KEY:?Missing AWS_SECRET_ACCESS_KEY}"
           : "${AWS_SESSION_TOKEN:?Missing AWS_SESSION_TOKEN}"
           : "${AWS_REGION:?Missing AWS_REGION}"
+          : "${TF_STATE_BUCKET:?Missing TF_STATE_BUCKET — create an empty S3 bucket in this region and add it as a secret (see README)}"
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
           AWS_REGION: ${{ secrets.AWS_REGION }}
+          TF_STATE_BUCKET: ${{ secrets.TF_STATE_BUCKET }}
+
+      - name: Verify ECS IAM strategy (Academy vs full AWS)
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${ECS_EXECUTION_ROLE_ARN:-}" ] && [ "${IAM_ROLE_CREATION_ALLOWED:-}" != "true" ]; then
+            echo "::error::Missing ECS_EXECUTION_ROLE_ARN. AWS Academy / Vocareum usually blocks iam:CreateRole — add secret ECS_EXECUTION_ROLE_ARN with an existing ecsTaskExecutionRole ARN from IAM."
+            echo "::error::If your IAM user may create roles, add repository secret IAM_ROLE_CREATION_ALLOWED=true instead."
+            exit 1
+          fi
+        env:
+          ECS_EXECUTION_ROLE_ARN: ${{ secrets.ECS_EXECUTION_ROLE_ARN }}
+          IAM_ROLE_CREATION_ALLOWED: ${{ secrets.IAM_ROLE_CREATION_ALLOWED }}
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -170,9 +185,17 @@ jobs:
         working-directory: terraform
         run: terraform fmt -check -recursive
 
-      - name: Phase 2 — Terraform init
+      - name: Phase 2 — Terraform init (S3 remote state)
         working-directory: terraform
-        run: terraform init -input=false
+        env:
+          TF_STATE_BUCKET: ${{ secrets.TF_STATE_BUCKET }}
+        run: |
+          set -euo pipefail
+          terraform init -input=false \
+            -backend-config="bucket=${TF_STATE_BUCKET}" \
+            -backend-config="key=carlo/terraform.tfstate" \
+            -backend-config="region=${AWS_REGION}" \
+            -backend-config="encrypt=true"
 
       - name: Phase 2 — Terraform validate
         working-directory: terraform
