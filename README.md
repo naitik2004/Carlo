@@ -6,16 +6,16 @@ Carlo is a full-stack car rental app with a React/Vite frontend and an Express/M
 
 - `frontend/`: React, React Router, Tailwind CSS, reusable UI components, API client utilities, unit tests, and an E2E smoke test.
 - `backend/`: Express API, JWT authentication middleware, Mongoose models, route-level tests, and MongoDB integration through `MONGO_URI`.
-- `.github/workflows/ci.yml`: installs dependencies, runs lint, runs tests, and builds the frontend on `push` and `pull_request`.
+- `.github/workflows/ci.yml`: **Phase 1** — unit/integration tests with JUnit reports and artifacts; **Phase 2** — Terraform init/validate on pull requests, and on `main` push format/init/validate/plan/apply (S3 per rubric: unique name, versioning, encryption, public access blocked); **Phase 3** — Docker build/push to ECR and ECS Fargate deploy + stability checks. **ECS is the deployment target** (EKS/Kubernetes is not in scope).
 - `.github/dependabot.yml`: checks frontend/backend npm dependencies and GitHub Actions weekly.
 - `scripts/deploy-ec2.sh`: idempotent EC2 deployment script used by GitHub Actions over SSH.
 
 ## Workflow
 
-1. Developers open a branch and make logical commits.
-2. Pull requests trigger lint, unit tests, integration tests, and the frontend build.
-3. Pushes to `main` also run the same checks.
-4. The EC2 deployment workflow can run in either SSH mode or AWS Systems Manager mode and then execute `scripts/deploy-ec2.sh`.
+1. **Push or pull request** → **Phase 1** runs (lint, tests with reports, frontend build, E2E smoke).
+2. **Pull request** → **Phase 2** runs Terraform format check, init, and validate (no AWS apply).
+3. **Push to `main`** → **Phase 2 & 3**: Terraform plan/apply (infrastructure including S3 + ECR + ECS), then Docker image build/push and ECS Fargate deployment with service verification.
+4. Optional: `.github/workflows/deploy-ec2.yml` is **manual only** (`workflow_dispatch`) for EC2-style deploys.
 
 ## Local Development
 
@@ -52,10 +52,24 @@ Frontend:
 
 - `VITE_API_URL`: backend base URL, for example `http://localhost:4000`.
 
-GitHub deployment secrets:
+GitHub Actions secrets (**Settings → Secrets and variables → Actions**), per project rubric:
 
-- SSH mode: `EC2_HOST`, `EC2_USER`, `EC2_SSH_KEY`, `EC2_APP_DIR`.
-- AWS learner/SSM mode: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`, `AWS_REGION`, `EC2_INSTANCE_ID`, `EC2_APP_DIR`.
+**Required for Terraform apply + ECS on `main`:**
+
+- `AWS_ACCESS_KEY_ID`
+- `AWS_SECRET_ACCESS_KEY`
+- `AWS_SESSION_TOKEN`
+- `AWS_REGION`
+
+**Optional (app / restricted IAM):**
+
+- `MONGO_URI`, `JWT_SECRET` — passed into the ECS task when set.
+- `ECS_EXECUTION_ROLE_ARN` (and optionally `ECS_TASK_ROLE_ARN`) — use when your AWS account (e.g. AWS Academy) blocks creating new IAM roles; supply an existing ECS execution role ARN.
+
+**EC2 workflow only (if you use `deploy-ec2.yml`):**
+
+- SSH: `EC2_HOST`, `EC2_USER`, `EC2_SSH_KEY`, `EC2_APP_DIR`
+- SSM: `EC2_INSTANCE_ID`, `EC2_APP_DIR` (plus the four AWS secrets above)
 
 ## Testing Strategy
 

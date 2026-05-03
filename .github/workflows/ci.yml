@@ -1,3 +1,6 @@
+# Rubric: Push/PR → Tests → Terraform (init/validate/plan/apply on main) → Docker → ECS Fargate.
+# Deployment path is ECS only (Phase 4 EKS / Kubernetes is not implemented).
+
 name: CI
 
 on:
@@ -89,7 +92,7 @@ jobs:
           test -f terraform/s3.tf
 
   phase-2-terraform-validate:
-    name: Phase 2 — Terraform validate (pull requests)
+    name: Phase 2 — Infrastructure (Terraform init & validate on PRs)
     runs-on: ubuntu-latest
     needs: phase-1-testing
     if: github.event_name == 'pull_request'
@@ -107,17 +110,17 @@ jobs:
         with:
           terraform_version: 1.9.0
 
-      - name: Terraform Format Check
+      - name: Phase 2 — Terraform format check
         run: terraform fmt -check -recursive
 
-      - name: Terraform Init (local backend)
+      - name: Phase 2 — Terraform init
         run: terraform init -backend=false -input=false
 
-      - name: Terraform Validate
+      - name: Phase 2 — Terraform validate
         run: terraform validate
 
-  phase-3-deploy:
-    name: Phase 2–3 — Terraform apply, Docker, ECS Fargate
+  phase-2-3-ecs:
+    name: Phase 2 & 3 — Terraform apply + Docker + ECS Fargate (main)
     runs-on: ubuntu-latest
     needs: phase-1-testing
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -163,19 +166,19 @@ jobs:
         with:
           terraform_version: 1.9.0
 
-      - name: Terraform Format Check
+      - name: Phase 2 — Terraform format check
         working-directory: terraform
         run: terraform fmt -check -recursive
 
-      - name: Terraform Init
+      - name: Phase 2 — Terraform init
         working-directory: terraform
         run: terraform init -input=false
 
-      - name: Terraform Validate
+      - name: Phase 2 — Terraform validate
         working-directory: terraform
         run: terraform validate
 
-      - name: Terraform plan and apply
+      - name: Phase 2 — Terraform plan and apply
         working-directory: terraform
         env:
           MONGO_URI: ${{ secrets.MONGO_URI }}
@@ -192,7 +195,7 @@ jobs:
           terraform plan -input=false -out=tfplan
           terraform apply -auto-approve -input=false tfplan
 
-      - name: Capture Terraform outputs
+      - name: Phase 2 — Capture Terraform outputs
         id: tf
         working-directory: terraform
         run: |
@@ -200,10 +203,10 @@ jobs:
           echo "cluster=$(terraform output -raw ecs_cluster_name)" >> "$GITHUB_OUTPUT"
           echo "service=$(terraform output -raw ecs_service_name)" >> "$GITHUB_OUTPUT"
 
-      - name: Log in to Amazon ECR
+      - name: Phase 3 — Log in to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Build and push Docker image
+      - name: Phase 3 — Build and push Docker image
         env:
           ECR_URL: ${{ steps.tf.outputs.ecr_url }}
         run: |
@@ -212,7 +215,7 @@ jobs:
           docker push "$ECR_URL:latest"
           docker push "$ECR_URL:${GITHUB_SHA}"
 
-      - name: Deploy service to ECS Fargate
+      - name: Phase 3 — Deploy service to ECS Fargate
         env:
           CLUSTER: ${{ steps.tf.outputs.cluster }}
           SERVICE: ${{ steps.tf.outputs.service }}
@@ -224,7 +227,7 @@ jobs:
             --desired-count 1 \
             --force-new-deployment
 
-      - name: Wait for ECS service stability
+      - name: Phase 3 — Wait for ECS service stability
         env:
           CLUSTER: ${{ steps.tf.outputs.cluster }}
           SERVICE: ${{ steps.tf.outputs.service }}
@@ -232,7 +235,7 @@ jobs:
           set -euo pipefail
           aws ecs wait services-stable --cluster "$CLUSTER" --services "$SERVICE"
 
-      - name: Verify ECS service is running
+      - name: Phase 3 — Verify ECS service is running
         env:
           CLUSTER: ${{ steps.tf.outputs.cluster }}
           SERVICE: ${{ steps.tf.outputs.service }}
