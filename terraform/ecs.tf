@@ -157,7 +157,7 @@ resource "aws_ecs_service" "backend" {
   launch_type     = "FARGATE"
 
   deployment_minimum_healthy_percent = 0
-  deployment_maximum_percent = 200
+  deployment_maximum_percent         = 200
 
   network_configuration {
     subnets          = data.aws_subnets.default.ids
