@@ -136,7 +136,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Verify AWS secrets
+      - name: Verify AWS secrets (rubric keys only)
         shell: bash
         run: |
           set -euo pipefail
@@ -144,26 +144,11 @@ jobs:
           : "${AWS_SECRET_ACCESS_KEY:?Missing AWS_SECRET_ACCESS_KEY}"
           : "${AWS_SESSION_TOKEN:?Missing AWS_SESSION_TOKEN}"
           : "${AWS_REGION:?Missing AWS_REGION}"
-          : "${TF_STATE_BUCKET:?Missing TF_STATE_BUCKET — create an empty S3 bucket in this region and add it as a secret (see README)}"
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
           AWS_REGION: ${{ secrets.AWS_REGION }}
-          TF_STATE_BUCKET: ${{ secrets.TF_STATE_BUCKET }}
-
-      - name: Verify ECS IAM strategy (Academy vs full AWS)
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [ -z "${ECS_EXECUTION_ROLE_ARN:-}" ] && [ "${IAM_ROLE_CREATION_ALLOWED:-}" != "true" ]; then
-            echo "::error::Missing ECS_EXECUTION_ROLE_ARN. AWS Academy / Vocareum usually blocks iam:CreateRole — add secret ECS_EXECUTION_ROLE_ARN with an existing ecsTaskExecutionRole ARN from IAM."
-            echo "::error::If your IAM user may create roles, add repository secret IAM_ROLE_CREATION_ALLOWED=true instead."
-            exit 1
-          fi
-        env:
-          ECS_EXECUTION_ROLE_ARN: ${{ secrets.ECS_EXECUTION_ROLE_ARN }}
-          IAM_ROLE_CREATION_ALLOWED: ${{ secrets.IAM_ROLE_CREATION_ALLOWED }}
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -176,6 +161,52 @@ jobs:
       - name: Verify AWS identity
         run: aws sts get-caller-identity
 
+      - name: Ensure S3 bucket for Terraform state (no extra GitHub secret)
+        shell: bash
+        run: |
+          set -euo pipefail
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          BUCKET="carlo-tfstate-${ACCOUNT_ID}"
+          echo "TF_STATE_BUCKET=${BUCKET}" >> "$GITHUB_ENV"
+          echo "Using Terraform state bucket: ${BUCKET}"
+          if aws s3api head-bucket --bucket "${BUCKET}" 2>/dev/null; then
+            echo "State bucket already exists."
+          else
+            aws s3 mb "s3://${BUCKET}" --region "${AWS_REGION}"
+            aws s3api put-bucket-versioning --bucket "${BUCKET}" --versioning-configuration Status=Enabled
+            aws s3api put-public-access-block --bucket "${BUCKET}" --public-access-block-configuration BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true || true
+            aws s3api put-bucket-encryption --bucket "${BUCKET}" --server-side-encryption-configuration '{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"}}]}' || true
+          fi
+
+      - name: Resolve ECS task execution role (AWS Academy–friendly)
+        shell: bash
+        env:
+          ECS_EXECUTION_ROLE_ARN: ${{ secrets.ECS_EXECUTION_ROLE_ARN }}
+        run: |
+          set -euo pipefail
+          if [ -n "${ECS_EXECUTION_ROLE_ARN:-}" ]; then
+            echo "TF_VAR_existing_ecs_execution_role_arn=${ECS_EXECUTION_ROLE_ARN}" >> "$GITHUB_ENV"
+            echo "Using ECS_EXECUTION_ROLE_ARN from GitHub secret."
+            exit 0
+          fi
+          EXEC_ARN=""
+          for ROLE in ecsTaskExecutionRole ecsExecutionRole; do
+            if aws iam get-role --role-name "$ROLE" &>/dev/null; then
+              EXEC_ARN=$(aws iam get-role --role-name "$ROLE" --query Role.Arn --output text)
+              break
+            fi
+          done
+          if [ -z "${EXEC_ARN}" ]; then
+            R=$(aws iam list-roles --query "Roles[?contains(RoleName, 'ecsTaskExecution')].Arn | [0]" --output text 2>/dev/null || true)
+            if [ -n "${R}" ] && [ "${R}" != "None" ]; then EXEC_ARN="${R}"; fi
+          fi
+          if [ -n "${EXEC_ARN}" ]; then
+            echo "TF_VAR_existing_ecs_execution_role_arn=${EXEC_ARN}" >> "$GITHUB_ENV"
+            echo "Discovered ECS execution role for Terraform: ${EXEC_ARN}"
+          else
+            echo "No ecsTaskExecutionRole found; Terraform will try to create IAM roles (needs iam:CreateRole)."
+          fi
+
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
@@ -187,10 +218,9 @@ jobs:
 
       - name: Phase 2 — Terraform init (S3 remote state)
         working-directory: terraform
-        env:
-          TF_STATE_BUCKET: ${{ secrets.TF_STATE_BUCKET }}
         run: |
           set -euo pipefail
+          : "${TF_STATE_BUCKET:?TF_STATE_BUCKET should be set by the Ensure S3 bucket step}"
           terraform init -input=false \
             -backend-config="bucket=${TF_STATE_BUCKET}" \
             -backend-config="key=carlo/terraform.tfstate" \

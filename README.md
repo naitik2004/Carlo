@@ -54,23 +54,25 @@ Frontend:
 
 GitHub Actions secrets (**Settings → Secrets and variables → Actions**), per project rubric:
 
-**Required for Terraform apply + ECS on `main`:**
+**Required for Terraform apply + ECS on `main` (matches course rubric):**
 
 - `AWS_ACCESS_KEY_ID`
 - `AWS_SECRET_ACCESS_KEY`
 - `AWS_SESSION_TOKEN`
 - `AWS_REGION`
-- **`TF_STATE_BUCKET`** — name of an **empty S3 bucket** you create once in the **same region** as `AWS_REGION`, used only to store `terraform.tfstate` (GitHub runners are ephemeral; without this, every run tries to recreate ECR/SG/etc. and fails with “already exists”).
 
-**ECS / IAM (pick one):**
+The workflow **does not require any other GitHub secrets** for a basic deploy:
 
-- **`ECS_EXECUTION_ROLE_ARN`** — required for **AWS Academy / Vocareum** (and any account that denies `iam:CreateRole`). Use an existing role that trusts `ecs-tasks.amazonaws.com` and can pull from ECR and write logs (e.g. `AmazonECSTaskExecutionRolePolicy`).
-- **`IAM_ROLE_CREATION_ALLOWED`** — set to `true` only if your IAM user **may** create roles; then Terraform creates the execution/task roles and `ECS_EXECUTION_ROLE_ARN` can be omitted.
+- It creates an S3 bucket **`carlo-tfstate-<your-account-id>`** automatically (if allowed) and stores Terraform state there so runs do not hit “already exists” on every push.
+- It tries to **discover** an existing **`ecsTaskExecutionRole`** (or similar) for ECS. AWS Academy often already has this after you use ECS once in the console; if not, open **ECS** in the console once or create that role per AWS docs.
 
-**Optional (app):**
+**Optional overrides (only if you want them):**
 
+- `ECS_EXECUTION_ROLE_ARN` — force a specific execution role instead of auto-discovery.
 - `MONGO_URI`, `JWT_SECRET` — passed into the ECS task when set.
-- `ECS_TASK_ROLE_ARN` — optional separate task role when using a lab execution role.
+- `ECS_TASK_ROLE_ARN` — optional separate task role.
+
+**Security:** Learner-lab keys are temporary. Never paste access keys or session tokens in screenshots, chat, or public repos. If they were exposed, end the lab session and start a new one, then update the four GitHub secrets.
 
 **EC2 workflow only (if you use `deploy-ec2.yml`):**
 
@@ -96,7 +98,10 @@ GitHub Actions secrets (**Settings → Secrets and variables → Actions**), per
 You likely had a failed run **before** remote state was configured. Either delete the leftover `carlo-backend` ECR repository and `/ecs/carlo-backend` log group in the AWS console, then re-run CI, or import them into state (advanced).
 
 **`AccessDenied` on `iam:CreateRole`**  
-Add **`ECS_EXECUTION_ROLE_ARN`** with an existing execution role ARN. Do not rely on Terraform creating roles in learner labs.
+Ensure an **`ecsTaskExecutionRole`** (or equivalent) exists in the account so the workflow can discover it, or add optional secret **`ECS_EXECUTION_ROLE_ARN`** with that role’s ARN.
+
+**`AccessDenied` on `s3:CreateBucket` (state bucket)**  
+Your lab may block creating `carlo-tfstate-<account-id>`. Ask your instructor or create an allowed bucket manually and we can wire a secret again if needed.
 
 ## Challenges
 
