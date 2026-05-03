@@ -6,6 +6,8 @@
     "install:all": "npm ci --prefix frontend && npm ci --prefix backend",
     "lint": "npm run lint --prefix frontend && npm run lint --prefix backend",
     "test": "npm test --prefix frontend && npm test --prefix backend",
+    "test:unit": "npm test --prefix frontend && npm run test:unit --prefix backend",
+    "test:integration": "npm run test:integration --prefix backend",
     "build": "npm run build --prefix frontend",
     "ci": "npm run lint && npm test && npm run build"
   }
