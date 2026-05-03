@@ -58,7 +58,13 @@ data "aws_iam_policy_document" "ecs_tasks_assume" {
   }
 }
 
+locals {
+  container_health_shell = "node -e \"fetch('http://127.0.0.1:4000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""
+}
+
 resource "aws_iam_role" "ecs_execution" {
+  count = var.existing_ecs_execution_role_arn == "" ? 1 : 0
+
   name_prefix        = "${var.project_name}-ecs-exec-"
   assume_role_policy = data.aws_iam_policy_document.ecs_tasks_assume.json
 
@@ -68,11 +74,15 @@ resource "aws_iam_role" "ecs_execution" {
 }
 
 resource "aws_iam_role_policy_attachment" "ecs_execution" {
-  role       = aws_iam_role.ecs_execution.name
+  count = var.existing_ecs_execution_role_arn == "" ? 1 : 0
+
+  role       = aws_iam_role.ecs_execution[0].name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
 resource "aws_iam_role" "ecs_task" {
+  count = var.existing_ecs_execution_role_arn == "" ? 1 : 0
+
   name_prefix        = "${var.project_name}-ecs-task-"
   assume_role_policy = data.aws_iam_policy_document.ecs_tasks_assume.json
 
@@ -82,7 +92,11 @@ resource "aws_iam_role" "ecs_task" {
 }
 
 locals {
-  container_health_shell = "node -e \"fetch('http://127.0.0.1:4000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""
+  ecs_execution_role_arn = length(aws_iam_role.ecs_execution) > 0 ? aws_iam_role.ecs_execution[0].arn : var.existing_ecs_execution_role_arn
+
+  ecs_task_role_arn = length(aws_iam_role.ecs_task) > 0 ? aws_iam_role.ecs_task[0].arn : (
+    var.existing_ecs_task_role_arn != "" ? var.existing_ecs_task_role_arn : null
+  )
 }
 
 resource "aws_ecs_cluster" "main" {
@@ -104,8 +118,8 @@ resource "aws_ecs_task_definition" "backend" {
   network_mode             = "awsvpc"
   cpu                      = "256"
   memory                   = "512"
-  execution_role_arn       = aws_iam_role.ecs_execution.arn
-  task_role_arn            = aws_iam_role.ecs_task.arn
+  execution_role_arn       = local.ecs_execution_role_arn
+  task_role_arn            = local.ecs_task_role_arn
 
   container_definitions = jsonencode([
     {
