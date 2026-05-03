@@ -1,0 +1,34 @@
+name: Deploy to EC2
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    needs: []
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            set -e
+            mkdir -p "${{ secrets.EC2_APP_DIR }}"
+            if [ ! -d "${{ secrets.EC2_APP_DIR }}/.git" ]; then
+              git clone "${{ github.server_url }}/${{ github.repository }}.git" "${{ secrets.EC2_APP_DIR }}"
+            fi
+            cd "${{ secrets.EC2_APP_DIR }}"
+            git fetch origin main
+            git reset --hard origin/main
+            chmod +x scripts/deploy-ec2.sh
+            ./scripts/deploy-ec2.sh
