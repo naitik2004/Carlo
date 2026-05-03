@@ -78,7 +78,7 @@ jobs:
 
       - name: Deploy over SSH
         if: steps.ec2-config.outputs.mode == 'ssh'
-        uses: appleboy/ssh-action@v1.0.3
+        uses: appleboy/ssh-action@v1.2.5
         with:
           host: ${{ env.EC2_HOST }}
           username: ${{ env.EC2_USER }}
