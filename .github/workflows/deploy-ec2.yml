@@ -9,25 +9,40 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    needs: []
+    env:
+      EC2_HOST: ${{ secrets.EC2_HOST }}
+      EC2_USER: ${{ secrets.EC2_USER }}
+      EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+      EC2_APP_DIR: ${{ secrets.EC2_APP_DIR }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Check EC2 configuration
+        id: ec2-config
+        run: |
+          if [ -z "$EC2_HOST" ] || [ -z "$EC2_USER" ] || [ -z "$EC2_SSH_KEY" ] || [ -z "$EC2_APP_DIR" ]; then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "EC2 deployment skipped because one or more EC2 secrets are missing."
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Deploy over SSH
+        if: steps.ec2-config.outputs.configured == 'true'
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
+          host: ${{ env.EC2_HOST }}
+          username: ${{ env.EC2_USER }}
+          key: ${{ env.EC2_SSH_KEY }}
           script: |
             set -e
-            mkdir -p "${{ secrets.EC2_APP_DIR }}"
-            if [ ! -d "${{ secrets.EC2_APP_DIR }}/.git" ]; then
-              git clone "${{ github.server_url }}/${{ github.repository }}.git" "${{ secrets.EC2_APP_DIR }}"
+            mkdir -p "${{ env.EC2_APP_DIR }}"
+            if [ ! -d "${{ env.EC2_APP_DIR }}/.git" ]; then
+              git clone "${{ github.server_url }}/${{ github.repository }}.git" "${{ env.EC2_APP_DIR }}"
             fi
-            cd "${{ secrets.EC2_APP_DIR }}"
+            cd "${{ env.EC2_APP_DIR }}"
             git fetch origin main
             git reset --hard origin/main
             chmod +x scripts/deploy-ec2.sh
