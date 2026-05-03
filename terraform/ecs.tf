@@ -1,16 +1,18 @@
-data "aws_default_vpc" "main" {}
+data "aws_vpc" "default" {
+  default = true
+}
 
 data "aws_subnets" "default" {
   filter {
     name   = "vpc-id"
-    values = [data.aws_default_vpc.main.id]
+    values = [data.aws_vpc.default.id]
   }
 }
 
 resource "aws_security_group" "ecs_tasks" {
   name_prefix = "${var.project_name}-ecs-tasks-"
   description = "Allow inbound HTTP to the Carlo backend task"
-  vpc_id      = data.aws_default_vpc.main.id
+  vpc_id      = data.aws_vpc.default.id
 
   ingress {
     description = "Backend API"
