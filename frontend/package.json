@@ -13,7 +13,7 @@
     "cypress:run": "cypress run"
   },
   "dependencies": {
-    "@tailwindcss/vite": "^4.1.17",
+    "@tailwindcss/vite": "^4.2.4",
     "axios": "^1.13.2",
     "gsap": "^3.13.0",
     "lucide-react": "^0.555.0",
