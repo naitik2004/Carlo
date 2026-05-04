@@ -238,6 +238,22 @@ jobs:
           ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
           BUCKET="carlo-tfstate-${ACCOUNT_ID}"
           echo "TF_STATE_BUCKET=${BUCKET}" >> "$GITHUB_ENV"
+          echo "ACCOUNT_ID=${ACCOUNT_ID}" >> "$GITHUB_ENV"
+
+      - name: Discover existing ECS roles
+        shell: bash
+        run: |
+          set -euo pipefail
+          ACCOUNT_ID="${ACCOUNT_ID}"
+          REGION="${AWS_REGION}"
+          
+          # Try to get existing ecsTaskExecutionRole
+          if EXEC_ROLE_ARN=$(aws iam get-role --role-name ecsTaskExecutionRole --query 'Role.Arn' --output text 2>/dev/null); then
+            echo "Found existing ECS execution role: $EXEC_ROLE_ARN"
+            echo "ECS_EXECUTION_ROLE_ARN=$EXEC_ROLE_ARN" >> "$GITHUB_ENV"
+          else
+            echo "No existing ECS execution role found"
+          fi
 
       - name: Terraform init with remote state
         run: |
@@ -247,6 +263,12 @@ jobs:
             -backend-config="key=carlo/terraform.tfstate" \
             -backend-config="region=${AWS_REGION}" \
             -backend-config="encrypt=true"
+
+      - name: Import existing resources
+        run: |
+          set -euo pipefail
+          terraform import aws_ecr_repository.backend carlo-backend || echo "ECR repository not found or already imported"
+          terraform import aws_cloudwatch_log_group.ecs_backend /ecs/carlo-backend || echo "Log group not found or already imported"
 
       - name: Terraform apply
         run: |
