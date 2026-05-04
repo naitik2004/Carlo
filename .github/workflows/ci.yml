@@ -247,13 +247,10 @@ jobs:
           ACCOUNT_ID="${ACCOUNT_ID}"
           REGION="${AWS_REGION}"
           
-          # Try to get existing ecsTaskExecutionRole
-          if EXEC_ROLE_ARN=$(aws iam get-role --role-name ecsTaskExecutionRole --query 'Role.Arn' --output text 2>/dev/null); then
-            echo "Found existing ECS execution role: $EXEC_ROLE_ARN"
-            echo "ECS_EXECUTION_ROLE_ARN=$EXEC_ROLE_ARN" >> "$GITHUB_ENV"
-          else
-            echo "No existing ECS execution role found"
-          fi
+          # Assume default ecsTaskExecutionRole exists in AWS Academy
+          EXEC_ROLE_ARN="arn:aws:iam::${ACCOUNT_ID}:role/ecsTaskExecutionRole"
+          echo "Using assumed ECS execution role: $EXEC_ROLE_ARN"
+          echo "ECS_EXECUTION_ROLE_ARN=$EXEC_ROLE_ARN" >> "$GITHUB_ENV"
 
       - name: Terraform init with remote state
         run: |
