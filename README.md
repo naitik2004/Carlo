@@ -63,7 +63,7 @@ GitHub Actions secrets (**Settings → Secrets and variables → Actions**), per
 The workflow **does not require any other GitHub secrets** for a basic deploy:
 
 - It creates an S3 bucket **`carlo-tfstate-<your-account-id>`** automatically (if allowed) and stores Terraform state there so runs do not hit “already exists” on every push.
-- It tries to **discover** an existing **`ecsTaskExecutionRole`** (or similar) for ECS. AWS Academy often already has this after you use ECS once in the console; if not, open **ECS** in the console once or create that role per AWS docs.
+- It tries to **discover** an existing AWS Academy role for ECS. In AWS Academy labs, use `LabRole` instead of `ecsTaskExecutionRole` when available.
 
 **Optional overrides (only if you want them):**
 
@@ -91,8 +91,8 @@ The workflow **does not require any other GitHub secrets** for a basic deploy:
 **`RepositoryAlreadyExistsException` (ECR) or log group already exists**  
 You likely had a failed run **before** remote state was configured. Either delete the leftover `carlo-backend` ECR repository and `/ecs/carlo-backend` log group in the AWS console, then re-run CI, or import them into state (advanced).
 
-**`AccessDenied` on `iam:CreateRole`**  
-Ensure an **`ecsTaskExecutionRole`** (or equivalent) exists in the account so the workflow can discover it, or add optional secret `ECS_EXECUTION_ROLE_ARN` with that role’s ARN.
+**`AccessDenied` on `iam:CreateRole`**
+Ensure an AWS Academy `LabRole` (or equivalent execution role) exists in the account so the workflow can discover it, or add optional secret `ECS_EXECUTION_ROLE_ARN` with that role’s ARN.
 
 **`AccessDenied` on `s3:CreateBucket` (state bucket)**  
 Your lab may block creating `carlo-tfstate-<account-id>`. Ask your instructor or create an allowed bucket manually and we can wire a secret again if needed.

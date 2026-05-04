@@ -247,8 +247,8 @@ jobs:
           ACCOUNT_ID="${ACCOUNT_ID}"
           REGION="${AWS_REGION}"
           
-          # Assume default ecsTaskExecutionRole exists in AWS Academy
-          EXEC_ROLE_ARN="arn:aws:iam::${ACCOUNT_ID}:role/ecsTaskExecutionRole"
+          # Use AWS Academy LabRole instead of ecsTaskExecutionRole
+          EXEC_ROLE_ARN="arn:aws:iam::${ACCOUNT_ID}:role/LabRole"
           echo "Using assumed ECS execution role: $EXEC_ROLE_ARN"
           echo "ECS_EXECUTION_ROLE_ARN=$EXEC_ROLE_ARN" >> "$GITHUB_ENV"
 
