@@ -261,11 +261,6 @@ jobs:
             -backend-config="region=${AWS_REGION}" \
             -backend-config="encrypt=true"
 
-      - name: Import existing resources
-        run: |
-          set -euo pipefail
-          terraform import aws_ecr_repository.backend carlo-backend || echo "ECR repository not found or already imported"
-          terraform import aws_cloudwatch_log_group.ecs_backend /ecs/carlo-backend || echo "Log group not found or already imported"
 
       - name: Terraform apply
         run: |
