@@ -122,6 +122,8 @@ jobs:
       AWS_REGION: ${{ secrets.AWS_REGION }}
       MONGO_URI: ${{ secrets.MONGO_URI }}
       JWT_SECRET_DEPLOY: ${{ secrets.JWT_SECRET }}
+      ECS_EXECUTION_ROLE_ARN: ${{ secrets.ECS_EXECUTION_ROLE_ARN }}
+      ECS_TASK_ROLE_ARN: ${{ secrets.ECS_TASK_ROLE_ARN }}
 
     defaults:
       run:
@@ -178,6 +180,8 @@ jobs:
       - name: Terraform plan
         run: |
           set -euo pipefail
+          if [ -n "${ECS_EXECUTION_ROLE_ARN:-}" ]; then export TF_VAR_existing_ecs_execution_role_arn="$ECS_EXECUTION_ROLE_ARN"; fi
+          if [ -n "${ECS_TASK_ROLE_ARN:-}" ]; then export TF_VAR_existing_ecs_task_role_arn="$ECS_TASK_ROLE_ARN"; fi
           if [ -n "${MONGO_URI:-}" ]; then export TF_VAR_mongo_uri="$MONGO_URI"; fi
           if [ -n "${JWT_SECRET_DEPLOY:-}" ]; then export TF_VAR_jwt_secret="$JWT_SECRET_DEPLOY"; fi
           terraform plan -input=false -out=tfplan
