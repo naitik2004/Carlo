@@ -39,13 +39,17 @@ export default defineConfig([
     },
   },
   {
-    files: ['cypress/**/*.js'],
+    files: ['**/*.cy.js'],
     languageOptions: {
       ecmaVersion: 2020,
       globals: {
         ...globals.browser,
         cy: 'readonly',
         Cypress: 'readonly',
+        describe: 'readonly',
+        it: 'readonly',
+        beforeEach: 'readonly',
+        afterEach: 'readonly',
       },
     },
   },
