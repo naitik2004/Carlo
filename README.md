@@ -6,16 +6,15 @@ Carlo is a full-stack car rental app with a React/Vite frontend and an Express/M
 
 - `frontend/`: React, React Router, Tailwind CSS, reusable UI components, API client utilities, unit tests, and an E2E smoke test.
 - `backend/`: Express API, JWT authentication middleware, Mongoose models, route-level tests, and MongoDB integration through `MONGO_URI`.
-- `.github/workflows/ci.yml`: **Phase 1** — unit/integration tests with JUnit reports and artifacts; **Phase 2** — Terraform init/validate on pull requests, and on `main` push format/init/validate/plan/apply (S3 per rubric: unique name, versioning, encryption, public access blocked); **Phase 3** — Docker build/push to ECR and ECS Fargate deploy + stability checks. **ECS is the deployment target** (EKS/Kubernetes is not in scope).
+- `.github/workflows/ci.yml`: **Phase 1** — unit/integration tests with JUnit reports and artifacts; **Phase 2** — Terraform init/validate/plan/apply (S3 per rubric: unique name, versioning, encryption, public access blocked); **Phase 3** — Docker build, push to ECR, ECS Fargate deploy, and running-service verification. **ECS is the deployment target** (EKS/Kubernetes is not in scope).
 - `.github/dependabot.yml`: checks frontend/backend npm dependencies and GitHub Actions weekly.
-- `scripts/deploy-ec2.sh`: idempotent EC2 deployment script used by GitHub Actions over SSH.
+- `terraform/`: AWS infrastructure code for S3 state, ECR, and ECS Fargate.
 
 ## Workflow
 
 1. **Push or pull request** → **Phase 1** runs (lint, tests with reports, frontend build, E2E smoke).
-2. **Pull request** → **Phase 2** runs Terraform format check, init, and validate (no AWS apply).
+2. **Pull request** → **Phase 2** runs Terraform format check, init, validate, and plan.
 3. **Push to `main`** → **Phase 2 & 3**: Terraform plan/apply (infrastructure including S3 + ECR + ECS), then Docker image build/push and ECS Fargate deployment with service verification.
-4. Optional: `.github/workflows/deploy-ec2.yml` is **manual only** (`workflow_dispatch`) for EC2-style deploys.
 
 ## Local Development
 
@@ -74,11 +73,6 @@ The workflow **does not require any other GitHub secrets** for a basic deploy:
 
 **Security:** Learner-lab keys are temporary. Never paste access keys or session tokens in screenshots, chat, or public repos. If they were exposed, end the lab session and start a new one, then update the four GitHub secrets.
 
-**EC2 workflow only (if you use `deploy-ec2.yml`):**
-
-- SSH: `EC2_HOST`, `EC2_USER`, `EC2_SSH_KEY`, `EC2_APP_DIR`
-- SSM: `EC2_INSTANCE_ID`, `EC2_APP_DIR` (plus the four AWS secrets above)
-
 ## Testing Strategy
 
 - Frontend unit tests cover reusable filter helpers used by UI pages.
@@ -98,7 +92,7 @@ The workflow **does not require any other GitHub secrets** for a basic deploy:
 You likely had a failed run **before** remote state was configured. Either delete the leftover `carlo-backend` ECR repository and `/ecs/carlo-backend` log group in the AWS console, then re-run CI, or import them into state (advanced).
 
 **`AccessDenied` on `iam:CreateRole`**  
-Ensure an **`ecsTaskExecutionRole`** (or equivalent) exists in the account so the workflow can discover it, or add optional secret **`ECS_EXECUTION_ROLE_ARN`** with that role’s ARN.
+Ensure an **`ecsTaskExecutionRole`** (or equivalent) exists in the account so the workflow can discover it, or add optional secret `ECS_EXECUTION_ROLE_ARN` with that role’s ARN.
 
 **`AccessDenied` on `s3:CreateBucket` (state bucket)**  
 Your lab may block creating `carlo-tfstate-<account-id>`. Ask your instructor or create an allowed bucket manually and we can wire a secret again if needed.

@@ -1,7 +1,4 @@
-# Rubric: Push/PR → Tests → Terraform (init/validate/plan/apply on main) → Docker → ECS Fargate.
-# Deployment path is ECS only (Phase 4 EKS / Kubernetes is not implemented).
-
-name: CI
+name: CI-CD
 
 on:
   push:
@@ -12,7 +9,7 @@ permissions:
 
 jobs:
   phase-1-testing:
-    name: Phase 1 — Testing (unit, integration, reports)
+    name: Phase 1 - Testing
     runs-on: ubuntu-latest
 
     steps:
@@ -44,34 +41,27 @@ jobs:
         run: npm run lint
         working-directory: backend
 
-      - name: Prepare report directory
+      - name: Prepare test reports directory
         run: mkdir -p test-reports
 
-      - name: Frontend unit tests (JUnit report)
+      - name: Frontend unit tests
         run: |
           node --test --test-reporter=junit --test-reporter-destination=../test-reports/frontend-unit.xml "src/**/*.test.js"
         working-directory: frontend
 
-      - name: Backend unit tests (JUnit report)
+      - name: Backend unit tests
         run: |
           node --test --test-reporter=junit --test-reporter-destination=../test-reports/backend-unit.xml src/middleware/auth.test.js
         working-directory: backend
         env:
           JWT_SECRET: test-secret
 
-      - name: Backend integration tests (JUnit report)
+      - name: Backend integration tests
         run: |
           node --test --test-reporter=junit --test-reporter-destination=../test-reports/backend-integration.xml src/routes/cars.test.js
         working-directory: backend
         env:
           JWT_SECRET: test-secret
-
-      - name: Upload test reports
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: test-reports
-          path: test-reports/
 
       - name: Build frontend
         run: npm run build
@@ -81,21 +71,21 @@ jobs:
         run: npx playwright install chromium --with-deps
         working-directory: frontend
 
-      - name: E2E smoke tests
+      - name: Run E2E smoke test
         run: npm run e2e
         working-directory: frontend
 
-      - name: Confirm Dockerfile and Terraform exist
-        run: |
-          test -f Dockerfile
-          test -f terraform/ecs.tf
-          test -f terraform/s3.tf
+      - name: Upload test reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-reports
+          path: test-reports/
 
   phase-2-terraform-validate:
-    name: Phase 2 — Infrastructure (Terraform init & validate on PRs)
+    name: Phase 2 - Infrastructure Provisioning (Terraform Validate)
     runs-on: ubuntu-latest
     needs: phase-1-testing
-    if: github.event_name == 'pull_request'
 
     defaults:
       run:
@@ -110,67 +100,119 @@ jobs:
         with:
           terraform_version: 1.9.0
 
-      - name: Phase 2 — Terraform format check
+      - name: Terraform fmt
         run: terraform fmt -check -recursive
 
-      - name: Phase 2 — Terraform init
+      - name: Terraform init
         run: terraform init -backend=false -input=false
 
-      - name: Phase 2 — Terraform validate
+      - name: Terraform validate
         run: terraform validate
 
-  phase-2-3-ecs:
-    name: Phase 2 & 3 — Terraform apply + Docker + ECS Fargate (main)
+  phase-2-terraform-plan:
+    name: Phase 2 - Infrastructure Provisioning (Terraform Plan)
     runs-on: ubuntu-latest
-    needs: phase-1-testing
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: phase-2-terraform-validate
 
     env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
+      MONGO_URI: ${{ secrets.MONGO_URI }}
+      JWT_SECRET_DEPLOY: ${{ secrets.JWT_SECRET }}
 
     defaults:
       run:
-        shell: bash
+        working-directory: terraform
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Verify AWS secrets (rubric keys only)
-        shell: bash
-        run: |
-          set -euo pipefail
-          : "${AWS_ACCESS_KEY_ID:?Missing AWS_ACCESS_KEY_ID}"
-          : "${AWS_SECRET_ACCESS_KEY:?Missing AWS_SECRET_ACCESS_KEY}"
-          : "${AWS_SESSION_TOKEN:?Missing AWS_SESSION_TOKEN}"
-          : "${AWS_REGION:?Missing AWS_REGION}"
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
-          AWS_REGION: ${{ secrets.AWS_REGION }}
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.0
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
-          aws-region: ${{ secrets.AWS_REGION }}
+          aws-access-key-id: ${{ env.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ env.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
 
-      - name: Verify AWS identity
-        run: aws sts get-caller-identity
+      - name: Terraform init
+        run: terraform init -backend=false -input=false
 
-      - name: Ensure S3 bucket for Terraform state (no extra GitHub secret)
+      - name: Terraform plan
+        run: |
+          set -euo pipefail
+          if [ -n "${MONGO_URI:-}" ]; then export TF_VAR_mongo_uri="$MONGO_URI"; fi
+          if [ -n "${JWT_SECRET_DEPLOY:-}" ]; then export TF_VAR_jwt_secret="$JWT_SECRET_DEPLOY"; fi
+          terraform plan -input=false -out=tfplan
+
+      - name: Save plan report
+        run: terraform show -no-color tfplan > terraform-plan.txt
+
+      - name: Upload plan report
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-plan
+          path: terraform/terraform-plan.txt
+
+  phase-2-terraform-apply:
+    name: Phase 2 - Infrastructure Provisioning (Terraform Apply)
+    runs-on: ubuntu-latest
+    needs: phase-2-terraform-plan
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      MONGO_URI: ${{ secrets.MONGO_URI }}
+      JWT_SECRET_DEPLOY: ${{ secrets.JWT_SECRET }}
+      ECS_EXECUTION_ROLE_ARN: ${{ secrets.ECS_EXECUTION_ROLE_ARN }}
+      ECS_TASK_ROLE_ARN: ${{ secrets.ECS_TASK_ROLE_ARN }}
+
+    defaults:
+      run:
+        working-directory: terraform
+
+    outputs:
+      ecr_repository_url: ${{ steps.tf.outputs.ecr_url }}
+      ecs_cluster_name: ${{ steps.tf.outputs.cluster }}
+      ecs_service_name: ${{ steps.tf.outputs.service }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.0
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ env.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ env.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Ensure Terraform state bucket
         shell: bash
         run: |
           set -euo pipefail
           ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
           BUCKET="carlo-tfstate-${ACCOUNT_ID}"
           echo "TF_STATE_BUCKET=${BUCKET}" >> "$GITHUB_ENV"
-          echo "Using Terraform state bucket: ${BUCKET}"
           if aws s3api head-bucket --bucket "${BUCKET}" 2>/dev/null; then
-            echo "State bucket already exists."
+            echo "Terraform state bucket already exists."
           else
             aws s3 mb "s3://${BUCKET}" --region "${AWS_REGION}"
             aws s3api put-bucket-versioning --bucket "${BUCKET}" --versioning-configuration Status=Enabled
@@ -178,69 +220,18 @@ jobs:
             aws s3api put-bucket-encryption --bucket "${BUCKET}" --server-side-encryption-configuration '{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"}}]}' || true
           fi
 
-      - name: Resolve ECS task execution role (AWS Academy–friendly)
-        shell: bash
-        env:
-          ECS_EXECUTION_ROLE_ARN: ${{ secrets.ECS_EXECUTION_ROLE_ARN }}
+      - name: Terraform init with remote state
         run: |
           set -euo pipefail
-          if [ -n "${ECS_EXECUTION_ROLE_ARN:-}" ]; then
-            echo "TF_VAR_existing_ecs_execution_role_arn=${ECS_EXECUTION_ROLE_ARN}" >> "$GITHUB_ENV"
-            echo "Using ECS_EXECUTION_ROLE_ARN from GitHub secret."
-            exit 0
-          fi
-          EXEC_ARN=""
-          for ROLE in ecsTaskExecutionRole ecsExecutionRole; do
-            if aws iam get-role --role-name "$ROLE" &>/dev/null; then
-              EXEC_ARN=$(aws iam get-role --role-name "$ROLE" --query Role.Arn --output text)
-              break
-            fi
-          done
-          if [ -z "${EXEC_ARN}" ]; then
-            R=$(aws iam list-roles --query "Roles[?contains(RoleName, 'ecsTaskExecution')].Arn | [0]" --output text 2>/dev/null || true)
-            if [ -n "${R}" ] && [ "${R}" != "None" ]; then EXEC_ARN="${R}"; fi
-          fi
-          if [ -n "${EXEC_ARN}" ]; then
-            echo "TF_VAR_existing_ecs_execution_role_arn=${EXEC_ARN}" >> "$GITHUB_ENV"
-            echo "Discovered ECS execution role for Terraform: ${EXEC_ARN}"
-          else
-            echo "No ecsTaskExecutionRole found; Terraform will try to create IAM roles (needs iam:CreateRole)."
-          fi
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: 1.9.0
-
-      - name: Phase 2 — Terraform format check
-        working-directory: terraform
-        run: terraform fmt -check -recursive
-
-      - name: Phase 2 — Terraform init (S3 remote state)
-        working-directory: terraform
-        run: |
-          set -euo pipefail
-          : "${TF_STATE_BUCKET:?TF_STATE_BUCKET should be set by the Ensure S3 bucket step}"
           terraform init -input=false \
             -backend-config="bucket=${TF_STATE_BUCKET}" \
             -backend-config="key=carlo/terraform.tfstate" \
             -backend-config="region=${AWS_REGION}" \
             -backend-config="encrypt=true"
 
-      - name: Phase 2 — Terraform validate
-        working-directory: terraform
-        run: terraform validate
-
-      - name: Phase 2 — Terraform plan and apply
-        working-directory: terraform
-        env:
-          MONGO_URI: ${{ secrets.MONGO_URI }}
-          JWT_SECRET_DEPLOY: ${{ secrets.JWT_SECRET }}
-          ECS_EXECUTION_ROLE_ARN: ${{ secrets.ECS_EXECUTION_ROLE_ARN }}
-          ECS_TASK_ROLE_ARN: ${{ secrets.ECS_TASK_ROLE_ARN }}
+      - name: Terraform apply
         run: |
           set -euo pipefail
-          export TF_VAR_aws_region="$AWS_REGION"
           if [ -n "${MONGO_URI:-}" ]; then export TF_VAR_mongo_uri="$MONGO_URI"; fi
           if [ -n "${JWT_SECRET_DEPLOY:-}" ]; then export TF_VAR_jwt_secret="$JWT_SECRET_DEPLOY"; fi
           if [ -n "${ECS_EXECUTION_ROLE_ARN:-}" ]; then export TF_VAR_existing_ecs_execution_role_arn="$ECS_EXECUTION_ROLE_ARN"; fi
@@ -248,30 +239,94 @@ jobs:
           terraform plan -input=false -out=tfplan
           terraform apply -auto-approve -input=false tfplan
 
-      - name: Phase 2 — Capture Terraform outputs
+      - name: Capture Terraform outputs
         id: tf
-        working-directory: terraform
         run: |
           echo "ecr_url=$(terraform output -raw ecr_repository_url)" >> "$GITHUB_OUTPUT"
           echo "cluster=$(terraform output -raw ecs_cluster_name)" >> "$GITHUB_OUTPUT"
           echo "service=$(terraform output -raw ecs_service_name)" >> "$GITHUB_OUTPUT"
 
-      - name: Phase 3 — Log in to Amazon ECR
+  phase-3-docker-build:
+    name: Phase 3 - Container Build (Docker)
+    runs-on: ubuntu-latest
+    needs: phase-2-terraform-apply
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Docker build
+        run: docker build -t carlo-backend:ci .
+
+  phase-3-push-ecr:
+    name: Phase 3 - Push Image to ECR
+    runs-on: ubuntu-latest
+    needs:
+      - phase-2-terraform-apply
+      - phase-3-docker-build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ env.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ env.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Log in to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Phase 3 — Build and push Docker image
+      - name: Build and push image
         env:
-          ECR_URL: ${{ steps.tf.outputs.ecr_url }}
+          ECR_URL: ${{ needs.phase-2-terraform-apply.outputs.ecr_repository_url }}
         run: |
           set -euo pipefail
           docker build -t "$ECR_URL:latest" -t "$ECR_URL:${GITHUB_SHA}" .
           docker push "$ECR_URL:latest"
           docker push "$ECR_URL:${GITHUB_SHA}"
 
-      - name: Phase 3 — Deploy service to ECS Fargate
+  phase-3-deploy-ecs:
+    name: Phase 3 - Deploy to ECS Fargate
+    runs-on: ubuntu-latest
+    needs:
+      - phase-2-terraform-apply
+      - phase-3-push-ecr
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ env.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ env.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Redeploy ECS service
         env:
-          CLUSTER: ${{ steps.tf.outputs.cluster }}
-          SERVICE: ${{ steps.tf.outputs.service }}
+          CLUSTER: ${{ needs.phase-2-terraform-apply.outputs.ecs_cluster_name }}
+          SERVICE: ${{ needs.phase-2-terraform-apply.outputs.ecs_service_name }}
         run: |
           set -euo pipefail
           aws ecs update-service \
@@ -280,24 +335,43 @@ jobs:
             --desired-count 1 \
             --force-new-deployment
 
-      - name: Phase 3 — Wait for ECS service stability
+      - name: Wait for ECS service stability
         env:
-          CLUSTER: ${{ steps.tf.outputs.cluster }}
-          SERVICE: ${{ steps.tf.outputs.service }}
-        run: |
-          set -euo pipefail
-          aws ecs wait services-stable --cluster "$CLUSTER" --services "$SERVICE"
+          CLUSTER: ${{ needs.phase-2-terraform-apply.outputs.ecs_cluster_name }}
+          SERVICE: ${{ needs.phase-2-terraform-apply.outputs.ecs_service_name }}
+        run: aws ecs wait services-stable --cluster "$CLUSTER" --services "$SERVICE"
 
-      - name: Phase 3 — Verify ECS service is running
+  phase-3-verify-service:
+    name: Phase 3 - Verify Service Running
+    runs-on: ubuntu-latest
+    needs:
+      - phase-2-terraform-apply
+      - phase-3-deploy-ecs
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ env.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ env.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Confirm ECS service is running
         env:
-          CLUSTER: ${{ steps.tf.outputs.cluster }}
-          SERVICE: ${{ steps.tf.outputs.service }}
+          CLUSTER: ${{ needs.phase-2-terraform-apply.outputs.ecs_cluster_name }}
+          SERVICE: ${{ needs.phase-2-terraform-apply.outputs.ecs_service_name }}
         run: |
           set -euo pipefail
-          RUNNING=$(aws ecs describe-services --cluster "$CLUSTER" --services "$SERVICE" \
-            --query "services[0].runningCount" --output text)
-          DESIRED=$(aws ecs describe-services --cluster "$CLUSTER" --services "$SERVICE" \
-            --query "services[0].desiredCount" --output text)
+          RUNNING=$(aws ecs describe-services --cluster "$CLUSTER" --services "$SERVICE" --query "services[0].runningCount" --output text)
+          DESIRED=$(aws ecs describe-services --cluster "$CLUSTER" --services "$SERVICE" --query "services[0].desiredCount" --output text)
           echo "running=$RUNNING desired=$DESIRED"
           test "$RUNNING" = "$DESIRED"
           test "$RUNNING" != "0"
