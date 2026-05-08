@@ -42,7 +42,7 @@ router.post("/login", async (req, res) => {
 
     if (!process.env.JWT_SECRET) {
       console.error("JWT_SECRET is not defined");
-      return res.status(500).json({ message: "Server configuration error" });
+      return res.status(500).json({ message: "JWT_SECRET is missing in environment variables" });
     }
 
     const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: "1d" });
@@ -51,9 +51,9 @@ router.post("/login", async (req, res) => {
   } catch (error) {
     console.error("Login error details:", error);
     if (error.name === "MongooseError" || error.name === "MongoNetworkError") {
-      return res.status(503).json({ message: "Database connection error. Please try again later." });
+      return res.status(503).json({ message: "Database connection error: " + error.message });
     }
-    res.status(500).json({ message: "Internal server error" });
+    res.status(500).json({ message: "Internal server error: " + error.message });
   }
 });
 

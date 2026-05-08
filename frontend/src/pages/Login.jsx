@@ -24,8 +24,8 @@ export default function Login() {
       localStorage.setItem("token", data.token);
       localStorage.setItem("user", JSON.stringify(data.user));
       navigate("/dashboard");
-    } catch {
-      setError("Invalid email or password. Please try again.");
+    } catch (err) {
+      setError(err.response?.data?.message || "Invalid email or password. Please try again.");
     } finally {
       setIsLoading(false);
     }

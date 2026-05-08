@@ -22,8 +22,8 @@ export default function Signup() {
     try {
       await signup(form.name, form.email, form.password);
       navigate("/login");
-    } catch {
-      setError("Could not create account. This email might already be in use.");
+    } catch (err) {
+      setError(err.response?.data?.message || "Could not create account. Please try again.");
     } finally {
       setIsLoading(false);
     }
