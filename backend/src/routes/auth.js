@@ -23,9 +23,9 @@ router.post("/signup", async (req, res) => {
   } catch (error) {
     console.error("Signup error details:", error);
     if (error.name === "MongooseError" || error.name === "MongoNetworkError") {
-      return res.status(503).json({ message: "Database connection error. Please try again later." });
+      return res.status(503).json({ message: "Database connection error: " + error.message });
     }
-    res.status(500).json({ message: "Internal server error" });
+    res.status(500).json({ message: "Internal server error: " + error.message });
   }
 });
 
