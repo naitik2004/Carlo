@@ -8,6 +8,8 @@ import Dashboard from "../pages/Dashboard";
 import MyCars from "../pages/MyCars";
 import AddCar from "../pages/AddCar";
 import EditCar from "../pages/EditCar";
+import About from "../pages/About";
+import Support from "../pages/Support";
 
 export default function AppRoutes() {
   return (
@@ -17,6 +19,8 @@ export default function AppRoutes() {
       <Route path="/cars/:id" element={<CarDetails />} />
       <Route path="/login" element={<Login />} />
       <Route path="/signup" element={<Signup />} />
+      <Route path="/about" element={<About />} />
+      <Route path="/support" element={<Support />} />
 
       {/* Protected */}
       <Route path="/dashboard" element={<Dashboard />} />

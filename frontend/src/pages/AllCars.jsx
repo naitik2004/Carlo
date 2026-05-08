@@ -1,19 +1,22 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { motion, AnimatePresence } from "framer-motion";
+import { Search, Filter, SlidersHorizontal, Plus, LayoutGrid, List } from "lucide-react";
 import { getCars } from "../api/cars";
 import { buildCarQuery } from "../lib/carFilters";
+import CarCard from "../components/CarCard";
 
 export default function AllCars() {
   const [cars, setCars] = useState([]);
   const [filters, setFilters] = useState({ search: "", fuel: "", minPrice: "", maxPrice: "" });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [showFilters, setShowFilters] = useState(false);
 
   useEffect(() => {
     async function loadCars() {
       setLoading(true);
       setError("");
-
       try {
         const data = await getCars(buildCarQuery(filters));
         setCars(data);
@@ -23,7 +26,6 @@ export default function AllCars() {
         setLoading(false);
       }
     }
-
     loadCars();
   }, [filters]);
 
@@ -32,47 +34,145 @@ export default function AllCars() {
   };
 
   return (
-    <div className="mx-auto max-w-6xl p-6">
-      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+    <div className="max-w-7xl mx-auto px-6 py-12">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12">
         <div>
-          <h1 className="text-3xl font-bold">Available Cars</h1>
-          <p className="text-gray-600">Search, filter, and open a car listing.</p>
+          <motion.h1 
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            className="text-6xl font-black uppercase tracking-tighter text-black"
+          >
+            Elite <span className="text-zinc-300">Fleet</span>
+          </motion.h1>
+          <p className="text-zinc-500 text-sm font-bold uppercase tracking-widest mt-2">Discover your next destination companion.</p>
         </div>
-        <Link to="/add-car" className="rounded-md bg-black px-4 py-2 text-center font-semibold text-white">
-          Add Car
-        </Link>
-      </div>
-
-      <div className="mb-6 grid gap-3 rounded-lg border bg-white p-4 sm:grid-cols-4">
-        <input className="rounded-md border px-3 py-2" name="search" placeholder="Search model" value={filters.search} onChange={handleChange} />
-        <select className="rounded-md border px-3 py-2" name="fuel" value={filters.fuel} onChange={handleChange}>
-          <option value="">Any fuel</option>
-          <option value="petrol">Petrol</option>
-          <option value="diesel">Diesel</option>
-          <option value="electric">Electric</option>
-          <option value="hybrid">Hybrid</option>
-        </select>
-        <input className="rounded-md border px-3 py-2" name="minPrice" type="number" placeholder="Min price" value={filters.minPrice} onChange={handleChange} />
-        <input className="rounded-md border px-3 py-2" name="maxPrice" type="number" placeholder="Max price" value={filters.maxPrice} onChange={handleChange} />
-      </div>
-
-      {loading && <p className="text-gray-600">Loading cars...</p>}
-      {error && <p className="rounded-md bg-red-50 p-3 text-red-700">{error}</p>}
-
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {cars.map((car) => (
-          <Link key={car._id} to={`/cars/${car._id}`} className="rounded-lg border bg-white p-4 shadow-sm transition hover:shadow-md">
-            <div className="mb-4 flex h-40 items-center justify-center rounded-md bg-gray-100">
-              {car.imageUrl ? <img className="h-full w-full rounded-md object-cover" src={car.imageUrl} alt={`${car.brand} ${car.model}`} /> : <span className="text-gray-500">No image</span>}
-            </div>
-            <h2 className="text-xl font-semibold">{car.brand} {car.model}</h2>
-            <p className="text-gray-600">{car.year} • {car.fuelType}</p>
-            <p className="mt-2 font-bold">₹{car.pricePerDay}/day</p>
+        
+        <div className="flex items-center gap-4">
+          <button 
+            onClick={() => setShowFilters(!showFilters)}
+            className={`flex items-center gap-3 px-6 py-3 text-[10px] font-black uppercase tracking-widest border transition-all ${
+              showFilters ? "bg-black border-black text-white shadow-xl shadow-black/10" : "border-zinc-100 bg-zinc-50 text-zinc-400 hover:border-black/20"
+            }`}
+          >
+            <SlidersHorizontal className="w-3 h-3" />
+            Filters
+          </button>
+          <Link to="/add-car" className="btn-premium py-3 px-6">
+            <Plus className="w-3 h-3" />
+            List Car
           </Link>
-        ))}
+        </div>
       </div>
 
-      {!loading && cars.length === 0 && <p className="rounded-md border bg-white p-6 text-center text-gray-600">No cars match your filters.</p>}
+      {/* Filters Area */}
+      <AnimatePresence>
+        {showFilters && (
+          <motion.div 
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="overflow-hidden mb-12"
+          >
+            <div className="card-premium p-10 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
+              <div className="space-y-3">
+                <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400 ml-1">Search Model</label>
+                <div className="relative">
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-300" />
+                  <input 
+                    className="input-premium pl-12 py-3" 
+                    name="search" 
+                    placeholder="e.g. Tesla" 
+                    value={filters.search} 
+                    onChange={handleChange} 
+                  />
+                </div>
+              </div>
+              
+              <div className="space-y-3">
+                <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400 ml-1">Fuel Type</label>
+                <select 
+                  className="input-premium py-3 appearance-none" 
+                  name="fuel" 
+                  value={filters.fuel} 
+                  onChange={handleChange}
+                >
+                  <option value="">All Types</option>
+                  <option value="petrol">Petrol</option>
+                  <option value="diesel">Diesel</option>
+                  <option value="electric">Electric</option>
+                  <option value="hybrid">Hybrid</option>
+                </select>
+              </div>
+
+              <div className="space-y-3">
+                <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400 ml-1">Min Price (₹)</label>
+                <input 
+                  className="input-premium py-3" 
+                  name="minPrice" 
+                  type="number" 
+                  placeholder="0" 
+                  value={filters.minPrice} 
+                  onChange={handleChange} 
+                />
+              </div>
+
+              <div className="space-y-3">
+                <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400 ml-1">Max Price (₹)</label>
+                <input 
+                  className="input-premium py-3" 
+                  name="maxPrice" 
+                  type="number" 
+                  placeholder="100,000+" 
+                  value={filters.maxPrice} 
+                  onChange={handleChange} 
+                />
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Content */}
+      {loading ? (
+        <div className="grid gap-12 sm:grid-cols-2 lg:grid-cols-3">
+          {[1, 2, 3, 4, 5, 6].map((i) => (
+            <div key={i} className="card-premium h-[500px] animate-pulse bg-zinc-50" />
+          ))}
+        </div>
+      ) : error ? (
+        <div className="card-premium p-24 text-center">
+          <p className="text-red-500 font-bold uppercase tracking-widest text-xs">{error}</p>
+        </div>
+      ) : (
+        <>
+          <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3 mb-12">
+            {cars.map((car) => (
+              <CarCard key={car._id} car={car} />
+            ))}
+          </div>
+
+          {cars.length === 0 && (
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="card-premium p-32 text-center flex flex-col items-center"
+            >
+              <div className="w-24 h-24 rounded-none bg-zinc-50 border border-zinc-100 flex items-center justify-center mb-10">
+                <Search className="w-10 h-10 text-zinc-200" />
+              </div>
+              <h3 className="text-3xl font-black uppercase tracking-tighter text-black mb-4">No match found</h3>
+              <p className="text-zinc-500 text-sm font-bold uppercase tracking-widest max-w-sm mb-10">We couldn't find any vehicles matching your criteria.</p>
+              <button 
+                onClick={() => setFilters({ search: "", fuel: "", minPrice: "", maxPrice: "" })}
+                className="btn-premium px-12"
+              >
+                Clear Filters
+              </button>
+            </motion.div>
+          )}
+        </>
+      )}
     </div>
   );
 }
