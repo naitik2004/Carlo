@@ -79,7 +79,6 @@ export default function Landing() {
   const heroImage = "https://images.unsplash.com/photo-1503376780353-7e6692767b70?auto=format&fit=crop&q=80&w=2000";
 
   const handleMouseMove = (e) => {
-    const rect = marqueeRef.current.getBoundingClientRect();
     mouseX.set(e.clientX - 150);
     mouseY.set(e.clientY - 100);
     
