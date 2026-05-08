@@ -21,7 +21,10 @@ router.post("/signup", async (req, res) => {
     
     res.status(201).json({ message: "User created", user: { id: user._id, name, email } });
   } catch (error) {
-    console.error("Signup error:", error);
+    console.error("Signup error details:", error);
+    if (error.name === "MongooseError" || error.name === "MongoNetworkError") {
+      return res.status(503).json({ message: "Database connection error. Please try again later." });
+    }
     res.status(500).json({ message: "Internal server error" });
   }
 });
@@ -46,7 +49,10 @@ router.post("/login", async (req, res) => {
 
     res.json({ token, user: { id: user._id, name: user.name, email: user.email } });
   } catch (error) {
-    console.error("Login error:", error);
+    console.error("Login error details:", error);
+    if (error.name === "MongooseError" || error.name === "MongoNetworkError") {
+      return res.status(503).json({ message: "Database connection error. Please try again later." });
+    }
     res.status(500).json({ message: "Internal server error" });
   }
 });
